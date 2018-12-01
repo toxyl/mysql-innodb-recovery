@@ -1,0 +1,367 @@
+#!/bin/bash
+START_DELAY=10
+
+print-bold()
+{
+	case $1 in
+		none) 
+			fg=-1
+			;;
+		gray)
+			fg=0
+			;;
+		red)
+			fg=1
+			;;
+		green)
+			fg=2
+			;;
+		yellow)
+			fg=3
+			;;
+		blue)
+			fg=4
+			;;
+		magenta)
+			fg=5
+			;;
+		cyan)
+			fg=6
+			;;
+		white)
+			fg=7
+			;;
+		light-gray)
+			fg=8
+			;;
+		light-red)
+			fg=9
+			;;
+		light-green)
+			fg=10
+			;;
+		light-yellow)
+			fg=11
+			;;
+		light-blue)
+			fg=12
+			;;
+		light-magenta)
+			fg=13
+			;;
+		light-cyan)
+			fg=14
+			;;
+		light-white)
+			fg=15
+			;;
+	esac
+
+	case $2 in
+		none) 
+			bg=-1
+			;;
+		gray)
+			bg=0
+			;;
+		red)
+			bg=1
+			;;
+		green)
+			bg=2
+			;;
+		yellow)
+			bg=3
+			;;
+		blue)
+			bg=4
+			;;
+		magenta)
+			bg=5
+			;;
+		cyan)
+			bg=6
+			;;
+		white)
+			bg=7
+			;;
+		light-gray)
+			bg=8
+			;;
+		light-red)
+			bg=9
+			;;
+		light-green)
+			bg=10
+			;;
+		light-yellow)
+			bg=11
+			;;
+		light-blue)
+			bg=12
+			;;
+		light-magenta)
+			bg=13
+			;;
+		light-cyan)
+			bg=14
+			;;
+		light-white)
+			bg=15
+			;;
+	esac
+
+	tput bold
+	
+	if [ "$fg" != '-1' ] ; then
+		tput setaf $fg
+	fi
+	
+	if [ "$bg" != '-1' ] ; then
+		tput setab $bg
+	fi
+
+	echo -n "$3"
+	tput sgr0
+}
+
+log()
+{
+	case "$1" in
+		info)
+			COL='white'
+			;;
+		ok)
+			COL='green'
+			;;
+		warning)
+			COL='yellow'
+			;;
+		error)
+			COL='red'
+			;;
+		failed)
+			COL='red'
+			;;
+		normal)
+			COL='gray'
+			;;
+		*)
+			if [ "$3" == '' ] ; then
+				COL='white'
+			else
+				COL="$3"
+			fi
+			;;
+	esac
+
+	STR=$(printf %-10s "[$1]" | tr '[:lower:]' '[:upper:]')
+	echo -e "$(print-bold $COL none "$STR") $2"
+}
+
+start_process() # $1 = action
+{
+	log info "Starting to $1 ..."
+}
+
+exit_success() # $1 = action
+{
+	log ok "Successfully $1."
+}
+
+exit_error() # $1 = action
+{
+	log error "Failed to $1!"
+	log error "Syslog:"
+	tail /var/log/syslog
+	log error "MySQL error log:"
+	tail /var/log/mysql/error.log
+	killall mysql 2> /dev/null
+	killall mysqld 2> /dev/null
+	killall mysqld_safe 2> /dev/null 
+	exit 1
+}
+
+kill_mysql()
+{
+	systemctl stop mysql 2> /dev/null
+	killall mysql 2> /dev/null
+	killall mysqld 2> /dev/null
+	killall mysqld_safe 2> /dev/null
+}
+
+start_mysql()
+{
+	sleep $START_DELAY &&\
+	service mysql start &&\
+	exit_success 'started MySQL' || exit_error 'start MySQL'
+}
+
+reload_mysql()
+{
+	systemctl reload-or-restart mysql && \
+	exit_success 'reloaded MySQL' || exit_error 'reload MySQL'
+}
+
+apt_clean()
+{
+	dpkg --configure -a > /dev/null &&\
+	apt-get autoremove -y -q > /dev/null &&\
+	apt-get autoclean -y -q > /dev/null &&\
+	exit_success 'cleaned OS' || exit_error 'clean OS'
+}
+
+remove_mysql_data()
+{
+	rm -rf /var/lib/mysql-* &&\
+	rm -rf /var/lib/mysql &&\
+	rm -rf /etc/mysql &&\
+	exit_success 'removed MySQL data' || exit_error 'remove MySQL data'
+}
+
+purge_mysql()
+{
+	DEBIAN_FRONTEND=noninteractive apt-get remove -f -y -q --purge mysql\* > /dev/null &&\
+	exit_success 'purged MySQL' || exit_error 'purge MySQL'
+}
+
+update_db_setting()
+{
+	updatedb > /dev/null &&\
+	exit_success 'updated DB setting' || exit_error 'update DB setting'
+}
+
+install_mysql()
+{
+	dpkg --configure -a > /dev/null &&\
+	apt-get update -q > /dev/null &&\
+	apt-get install -y -q libmysqlclient-dev mysql-client > /dev/null &&\
+	apt-get install -y -q mysql-server > /dev/null &&\
+	rm -rf /var/lib/mysql &&\
+	mkdir -p /var/run/mysqld &&\
+	chown mysql:mysql /var/run/mysqld &&\
+	chmod -R 777 /var/run/mysqld/ &&\
+	mkdir -p /var/lib/mysql &&\
+	chown mysql:mysql /var/lib/mysql &&\
+	chmod -R 777 /var/lib/mysql/ &&\
+	mysqld --initialize-insecure > /dev/null &&\
+	exit_success 'installed MySQL' || exit_error 'install MySQL'
+}
+
+fix_auth_plugin_error()
+{
+	(mysqld_safe --skip-grant-tables > /dev/null &)
+	sleep $START_DELAY &&\
+	mysql -uroot -e "USE \`mysql\`; UPDATE user SET authentication_string=PASSWORD('') WHERE User='root';  UPDATE user SET plugin='mysql_native_password' WHERE User='root';" &&\
+	kill_mysql &&\
+	exit_success 'gained root access' || exit_error 'gain root access'
+}
+
+prepare_data() # $1 = source dir, $2 = prefix
+{
+	mkdir -p /var/run/mysqld &&\
+	chown mysql:mysql /var/run/mysqld &&\
+	chmod -R 777 /var/run/mysqld/ &&\
+	cp -R --remove-destination $1/$2* /var/lib/mysql/ &&\
+	copy_required_file $1 mysql/gtid_executed.ibd &&\
+	copy_required_file $1 mysql/innodb_index_stats.ibd &&\
+	copy_required_file $1 mysql/innodb_table_stats.ibd &&\
+	copy_required_file $1 ibdata1 &&\
+	(rm -rf /var/lib/mysql/mysql/.* 2> /dev/null; exit 0) &&\
+	chown -R mysql:mysql /var/lib/mysql &&\
+	chmod -R 777 /var/lib/mysql/ &&\
+	rm -rf /etc/mysql/my.cnf &&\
+	printf '!includedir /etc/mysql/conf.d/\n!includedir /etc/mysql/mysql.conf.d/\n\n[mysqld]\nmax_allowed_packet=1G\nnet_write_timeout=7200\nnet_read_timeout=7200\nwait_timeout=28800\nlock_wait_timeout=31536000\ninnodb_buffer_pool_size=1024M\ndefault_authentication_plugin=mysql_native_password\nskip_networking=1\nexplicit_defaults_for_timestamp=0\nread_buffer_size=2048M\n\n[mysqldump]\nmax_allowed_packet=1G\ndefault_auth=mysql_native_password\n' > /etc/mysql/my.cnf &&\
+	exit_success 'prepared data' || exit_error 'prepare data'
+}
+
+repair_databases() # $1 = databases
+{
+	start_mysql &&\
+	(mysql_upgrade > /dev/null ; exit 0) &&\
+	mysqlcheck   -uroot -v --auto-repair --databases $1 &&\
+	mysqlanalyze -uroot -v --use-frm --force --auto-repair --databases $1 &&\
+	exit_success 'repaired databases' || exit_error 'repair databases'
+}
+
+dump_databases() # $1 = output file, $2 = databases
+{
+	(mysqldump -uroot --force --quick --add-locks --databases $2 > "$1" ; exit 0) &&\
+	exit_success "dumped databases to $1" || exit_error 'dump databases'
+}
+
+list_dbs_to_recover() # $1 = source, $2 = basedir 
+{
+	ls -d $1* | perl -pe "s@$2/@@" | tr '\n' " " | perl -pe 's#\@002d#\-#'
+}
+
+copy_required_file() # $1 = source, $2 = file
+{
+	if [ ! -f "$1/$2" ] ; then
+		log error "Required file missing: $1/$2"
+		exit 1
+	else
+		cp "$1/$2" "/var/lib/mysql/$2" &&\
+		log ok "Required file copied to: /var/lib/mysql/$2"
+	fi
+}
+
+if [ "$2" == "" ] ; then
+	echo " "
+	echo "This script restores MySQL databases from a data directory."
+	echo "It will remove the MySQL server, all databases and configuration files and then reinstall the server, import the database files and then dump them. If the third parameter is provided and is skip-install then the re-installation procedure is skipped."
+	echo " "
+	echo "Usage:   mysql-innodb-recovery [database prefix] [data dir] {skip-install}"
+	echo "Example: mysql-innodb-recovery somedb /var/lib/mysql.bak"
+	echo "Example: mysql-innodb-recovery somedb /var/lib/mysql.bak skip-install"
+	exit 0
+fi
+
+prefix="$1"
+source="$2"
+target="/var/lib/mysql"
+outfile="$(pwd)/${prefix}.dump.sql"
+dbs="$(list_dbs_to_recover "${source}/${prefix}" "${source}")"
+
+echo "" &&\
+echo "MySQL InnoDB Databases Recovery Tool" &&\
+echo "" &&\
+log prefix 		"${prefix}" &&\
+log source 		"${source}" &&\
+log target 		"${target}" &&\
+log output 		"${outfile}" &&\
+log dbs 		"$(echo "$dbs" | perl -pe 's@ @\n\t   @g')" &&\
+echo "" &&\
+log warning "This tool has only been tested with one test case" &&\
+log warning "and one machine configuration. The databases" &&\
+log warning "tested use the InnoDb engine. On your machine" &&\
+log warning "it may not work as intended. Use it at YOUR OWN RISK!" &&\
+log warning "And be sure to have a backup of your databases" &&\
+log warning "and the MySQL configurations (client and server)!" &&\
+echo "" &&\
+log warning "If you continue all current databases" &&\
+log warning "and configs will be DESTROYED." &&\
+echo "" &&\
+log warning "Press Enter to continue or CTRL+C to abort." &&\
+read $choice
+
+killall mysql 2> /dev/null
+killall mysqld 2> /dev/null
+killall mysqld_safe 2> /dev/null
+truncate -s 0 /var/log/mysql/error.log
+
+if [ "$3" != 'skip-install' ] ; then
+	remove_mysql_data
+	purge_mysql
+	apt_clean
+	update_db_setting
+	install_mysql
+	kill_mysql
+fi
+
+prepare_data "$source" "$prefix"
+fix_auth_plugin_error
+repair_databases "$dbs"
+dump_databases "$outfile" "$dbs"
+kill_mysql
+log ok 'Done!'
