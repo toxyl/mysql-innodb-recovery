@@ -22,8 +22,27 @@ The above script would recover the databases that are named `my_db_prefix*` from
 
 Absence of these files will cause the script to terminate with an error.
 
-# Important!
+## Important!
 The script will leave an insecure MySQL installation behind that is configured for local database recovery, **not** production server use! It is advised to reinstall MySQL to ensure proper security. Import your dump after reinstalling. 
+
+### Example
+```bash
+	systemctl stop mysql
+	killall mysql
+	killall mysqld
+	killall mysqld_safe
+	rm -rf /var/lib/mysql-*
+	rm -rf /var/lib/mysql
+	rm -rf /etc/mysql
+	apt-get remove -f -y -q --purge mysql\*
+	apt-get clean
+	apt-get update
+	apt-get install libmysqlclient-dev mysql-client
+	apt-get install mysql-server
+	mysql_secure_installation
+	mysql_upgrade
+	mysql -u [username] --password=[password] < [path_to_sql]
+```
 
 # Motivation
 This script is a radical approach born out of frustration. After painstakingly piecing together a set of databases from a bunch of database exports from various project stages (different table definitions, different data, you name it) my MySQL server crashed together with the whole machine. The usual recovery approaches I found online did not work, so I began combining approaches until I had a working dump.
