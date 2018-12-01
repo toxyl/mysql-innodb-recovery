@@ -2,7 +2,7 @@
 A shell script that helps to recover corrupted MySQL databases (InnoDb engine).
 
 # How To Use
-Become root, copy the script to `/usr/local/bin` and make it executable (`chmod +x mysql-innodb-recovery`). Navigate to the folder where you want to store your dump and run `mysql-innodb-recovery`.
+Become root, copy the script to `/usr/local/bin` and make it executable (`chmod +x mysql-innodb-recovery`). Navigate to the folder where you want to store your dump and run `mysql-innodb-recovery [databases prefix] [damaged data dir]`.
 
 ## Example:
 ```bash
