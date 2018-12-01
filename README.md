@@ -4,7 +4,7 @@ A shell script that helps to recover corrupted MySQL databases (InnoDb engine).
 # How To Use
 Become root, copy the script to `/usr/local/bin` and make it executable (`chmod +x mysql-innodb-recovery`). Navigate to the folder where you want to store your dump and run `mysql-innodb-recovery [databases prefix] [damaged data dir]`.
 
-## Example:
+## Example
 ```bash
 su root
 cp mysql-innodb-recovery /usr/local/bin
@@ -13,7 +13,7 @@ cd /root/Desktop
 mysql-innodb-recovery my_db_prefix /var/lib/mysql.damaged
 ```
 
-The above script would recover the databases that are named `my_db_prefix*` from the source directory `/var/lib/mysql.damaged` to `/var/lib/mysql` (if your path is different you will have to adjust the hardcoded path in the script). The dump will be saved to `/root/Desktop/my_db_prefix.dump.sql` Besides the folders with the database specific files the script requires a few more files from the source directory: 
+The above script would recover the databases that are named `my_db_prefix*` from the source directory `/var/lib/mysql.damaged` to `/var/lib/mysql` (*if your path is different you will have to adjust the hardcoded path in the script*). The dump will be saved to `/root/Desktop/my_db_prefix.dump.sql` Besides the folders with the database specific files the script requires a few more files from the source directory: 
 
 - `ibdata1`
 - `mysql/gtid_executed.ibd`
