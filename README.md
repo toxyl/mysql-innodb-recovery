@@ -12,10 +12,11 @@ mysql-innodb-recovery my_db_prefix /var/lib/mysql.damaged
 ```
 
 The above script would recover the databases that are named `my_db_prefix*` from the source directory (`/var/lib/mysql.damaged`). Besides the folders with the database specific files the script requires a few more files from the source directory: 
-- `ibdata1`, 
-- `mysql/gtid_executed.ibd`, 
-- `mysql/innodb_index_stats.ibd` and 
-- `mysql/innodb_table_stats.ibd`. 
+- `ibdata1`
+- `mysql/gtid_executed.ibd`
+- `mysql/innodb_index_stats.ibd` 
+- `mysql/innodb_table_stats.ibd` 
+
 Absence of these files will cause the script to terminate with an error.
 
 # Motivation
